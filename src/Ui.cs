@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
@@ -112,35 +113,21 @@ namespace OrbitLauncher
             }
             drawing.Freeze(); return new DrawingImage(drawing);
         }
-        public static FrameworkElement AppIcon(LaunchItem item, double size)
-        {
-            string path = Targets.Clean(item.Target);
-            string symbol = Targets.IsWeb(path) ? "\uE774" : "\uE71D";
-            var holder = new Border { Width = size, Height = size, CornerRadius = new CornerRadius(7), Background = Brush("#F0F2F6"), Child = new TextBlock { Text = symbol, FontFamily = new FontFamily("Segoe MDL2 Assets"), FontSize = size * .55, Foreground = Brush("#8892A5"), HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center } };
-            holder.Loaded += async delegate
-            {
-                try
-                {
-                    var asset = await Assets.Get(item); if (!holder.IsLoaded) return;
-                    if (asset.Icon != null) { holder.Background = Brushes.Transparent; holder.Child = new Image { Source = asset.Icon, Stretch = Stretch.Uniform }; }
-                    else if (asset.Folder && holder.Child is TextBlock) ((TextBlock)holder.Child).Text = "\uE8B7";
-                }
-                catch { }
-            };
-            return holder;
-        }
+        public static FrameworkElement AppIcon(LaunchItem item, double size) { return new IconPresenter(item, size); }
         public static void ValidateRow(FrameworkElement row, TextBlock name, LaunchItem item)
         {
-            row.Loaded += async delegate
+            var view = Descendants<IconPresenter>(row).FirstOrDefault();
+            if (view == null) return;
+            view.Resolved += delegate(AssetInfo asset)
             {
-                try
-                {
-                    var asset = await Assets.Get(item); if (!row.IsLoaded) return;
-                    name.Foreground = asset.Error == null ? Ink : Brush("#B5604B");
-                    row.ToolTip = item.Target + (asset.Deferred ? "\n网络位置将在启动时检查。" : asset.Error == null ? "" : "\n" + asset.Error);
-                }
-                catch { }
+                if (!row.IsLoaded) return;
+                name.Foreground = asset.Error == null ? Ink : Brush("#B5604B");
+                row.ToolTip = item.Target + (asset.Deferred ? "\n网络位置将在启动时检查。" : asset.Error == null ? "" : "\n" + asset.Error);
             };
+        }
+        public static async void RefreshIcons(FrameworkElement root)
+        {
+            foreach (var view in Descendants<IconPresenter>(root)) await view.Refresh(true);
         }
         public static void Snapshot(Window window, string path)
         {

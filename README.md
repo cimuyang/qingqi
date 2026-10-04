@@ -1,8 +1,8 @@
 # 轻启
 
-![](https://github.com/cimuyang/qingqi/blob/main/%E8%BD%BB%E5%90%AF-%E5%AE%A3%E4%BC%A0%E4%BB%8B%E7%BB%8D-16x9.png)
+简洁的 Windows 分组启动器。把常用应用放进分组，一键开启工作、通讯或专注场景。
 
-使用 C# / WPF / .NET Framework，无第三方依赖，无需账户。
+当前版本：**1.2.1**。使用 C# / WPF / .NET Framework，无第三方依赖，无需账户。
 
 ## 功能
 
@@ -13,6 +13,7 @@
 - 显示启动进度，部分失败后可仅重试失败项。
 - 支持启动完成后自动退出、登录 Windows 时打开启动器、配置导入与导出。
 - 后台加载图标、后台原子保存、短动画、窗口位置恢复与已有实例唤起。
+- 快捷方式图标多层回退、失败自动重试，右键应用可“刷新图标”；不提供自定义图标设置。
 
 ## 构建与运行
 
@@ -51,7 +52,7 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\build.ps1
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\verify.ps1
 ```
 
-当前检查包含 126 项配置、WPF 交互、响应性与独立进程验证，包含单文件 EXE 独立运行检查，另生成界面截图。测试使用独立数据目录；结果位于 `qa\`。这些检查不覆盖所有第三方应用、显示器 DPI 和输入法组合。
+当前检查包含 139 项配置、WPF 交互、响应性与独立进程验证，包含单文件 EXE 独立运行检查，另生成界面截图。测试使用独立数据目录；结果位于 `qa\`。这些检查不覆盖所有第三方应用、显示器 DPI 和输入法组合。
 
 ```text
 轻启.exe               可直接运行的单文件程序

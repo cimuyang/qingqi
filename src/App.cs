@@ -15,8 +15,8 @@ using System.Windows.Threading;
 [assembly: AssemblyDescription("把常用应用放在一起，一个分组，一次开启。")]
 [assembly: AssemblyCompany("轻启")]
 [assembly: AssemblyProduct("轻启")]
-[assembly: AssemblyVersion("1.2.0.0")]
-[assembly: AssemblyFileVersion("1.2.0.0")]
+[assembly: AssemblyVersion("1.2.1.0")]
+[assembly: AssemblyFileVersion("1.2.1.0")]
 [assembly: TargetFramework(".NETFramework,Version=v4.8", FrameworkDisplayName = ".NET Framework 4.8")]
 
 namespace OrbitLauncher
@@ -32,6 +32,8 @@ namespace OrbitLauncher
             if (args.Length == 2 && args[0] == "--probe") { File.WriteAllText(args[1], "orbit-probe-ok", Encoding.UTF8); return 0; }
             if (args.Length == 2 && args[0] == "--self-test") return Tests.Run(Path.GetFullPath(args[1]));
             if (args.Length == 2 && args[0] == "--preview") return Preview.Run(Path.GetFullPath(args[1]));
+            if (args.Length == 3 && args[0] == "--icon-test-user") return IconVerification.Run(Path.GetFullPath(args[1]), Path.GetFullPath(args[2]));
+            if (args.Length == 2 && args[0] == "--icon-test") return IconVerification.Run(Path.GetFullPath(args[1]));
             if (args.Length == 2 && args[0] == "--ui-test") return UiVerification.Run(Path.GetFullPath(args[1]));
             if (args.Length == 2 && args[0] == "--responsiveness-test") return ResponsivenessVerification.Run(Path.GetFullPath(args[1]));
             string folder = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "OrbitLauncher");

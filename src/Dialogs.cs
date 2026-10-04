@@ -197,7 +197,7 @@ namespace OrbitLauncher
             var backups = new StackPanel { Orientation = Orientation.Horizontal }; var export = Ui.Button("导出配置…", delegate { Perform(Export); }, false); export.Margin = new Thickness(0, 0, 9, 0); backups.Children.Add(export); backups.Children.Add(Ui.Button("导入配置…", delegate { Perform(Import); }, false)); Body.Children.Add(backups);
             Help("导入会替换当前分组与启动习惯，原配置会保留为本地备份。导入本身不会启动应用。");
             var folder = Ui.Quiet("打开配置文件夹  ↗", OpenFolder); folder.HorizontalAlignment = HorizontalAlignment.Left; folder.Margin = new Thickness(-8, 12, 0, 0); Body.Children.Add(folder);
-            var about = Ui.Text("轻启  1.2.0  ·  本地保存，无需账户", 11, Ui.Muted); about.Margin = new Thickness(0, 25, 0, 0); Body.Children.Add(about); Buttons(delegate { Perform(Save); }, "保存设置");
+            var about = Ui.Text("轻启  1.2.1  ·  本地保存，无需账户", 11, Ui.Muted); about.Margin = new Thickness(0, 25, 0, 0); Body.Children.Add(about); Buttons(delegate { Perform(Save); }, "保存设置");
         }
         async Task Save()
         {

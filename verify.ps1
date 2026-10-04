@@ -2,7 +2,7 @@
 $projectRoot = $PSScriptRoot
 $exePath = Join-Path $projectRoot '轻启.exe'
 $qaRoot = Join-Path $projectRoot 'qa'
-foreach ($mode in @('--self-test', '--ui-test', '--responsiveness-test', '--preview')) {
+foreach ($mode in @('--self-test', '--ui-test', '--responsiveness-test', '--icon-test', '--preview')) {
     $verificationProcess = Start-Process -FilePath $exePath -ArgumentList $mode, ('"' + $qaRoot + '"') -PassThru -WindowStyle Hidden
     if (-not $verificationProcess.WaitForExit(45000)) { $verificationProcess.Kill(); throw "$mode 验证超时。" }
     $verificationProcess.Refresh()
@@ -131,5 +131,6 @@ Assert-Orbit ((Test-Path -LiteralPath $portableMarker) -and (Test-Path -LiteralP
 Get-Content -LiteralPath (Join-Path $qaRoot 'test-results.txt') -Encoding UTF8
 Get-Content -LiteralPath (Join-Path $qaRoot 'ui-test-results.txt') -Encoding UTF8
 Get-Content -LiteralPath (Join-Path $qaRoot 'responsiveness-results.txt') -Encoding UTF8
+Get-Content -LiteralPath (Join-Path $qaRoot 'icon-test-results.txt') -Encoding UTF8
 Get-Content -LiteralPath (Join-Path $qaRoot 'integration-results.txt') -Encoding UTF8
 Write-Output '所有检查通过。'

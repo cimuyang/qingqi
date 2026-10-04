@@ -22,6 +22,8 @@ namespace OrbitLauncher
         public string Error;
         public bool Deferred;
         public bool Folder;
+        public bool NeedsRetry;
+        internal IconStamp[] Dependencies;
     }
     // Coalesce identical requests and limit Shell work to two background STA workers.
     public static class Assets
@@ -30,20 +32,22 @@ namespace OrbitLauncher
         static readonly object sync = new object();
         static readonly Dictionary<string, Entry> cache = new Dictionary<string, Entry>();
         static readonly SemaphoreSlim slots = new SemaphoreSlim(2);
-        public static Task<AssetInfo> Get(LaunchItem item)
+        public static Task<AssetInfo> Get(LaunchItem item, bool force = false)
         {
             string key = Targets.Key(item);
             lock (sync)
             {
                 Entry entry;
-                if (cache.TryGetValue(key, out entry) && (!entry.Task.IsCompleted || (DateTime.UtcNow - entry.Time).TotalSeconds < 30)) return entry.Task;
+                bool found = cache.TryGetValue(key, out entry);
+                if (found && (!entry.Task.IsCompleted || (!force && (DateTime.UtcNow - entry.Time).TotalSeconds < (entry.Task.Status != TaskStatus.RanToCompletion || entry.Task.Result.NeedsRetry ? 1 : 30)))) return entry.Task;
+                AssetInfo previous = found && !force && entry.Task.Status == TaskStatus.RanToCompletion ? entry.Task.Result : null;
                 // Pending work stays coalesced even if the cache is full.
                 foreach (var old in cache.Where(p => p.Value.Task.IsCompleted).OrderBy(p => p.Value.Time).Take(Math.Max(0, cache.Count - 511)).ToList()) cache.Remove(old.Key);
                 var copy = new LaunchItem { Id = item.Id, Name = item.Name, Target = item.Target, Arguments = item.Arguments, WorkingDirectory = item.WorkingDirectory };
-                entry = new Entry { Task = Read(copy), Time = DateTime.UtcNow }; cache[key] = entry; return entry.Task;
+                entry = new Entry { Task = Read(copy, previous), Time = DateTime.UtcNow }; cache[key] = entry; return entry.Task;
             }
         }
-        static async Task<AssetInfo> Read(LaunchItem item)
+        static async Task<AssetInfo> Read(LaunchItem item, AssetInfo previous)
         {
             await slots.WaitAsync().ConfigureAwait(false);
             var done = new TaskCompletionSource<AssetInfo>();
@@ -57,19 +61,19 @@ namespace OrbitLauncher
                     result.Error = Targets.Error(item);
                     string path = Targets.Clean(item.Target);
                     result.Folder = Directory.Exists(path);
-                    if (File.Exists(path)) using (var icon = System.Drawing.Icon.ExtractAssociatedIcon(path))
-                    {
-                        if (icon != null) { var image = Imaging.CreateBitmapSourceFromHIcon(icon.Handle, Int32Rect.Empty, BitmapSizeOptions.FromWidthAndHeight(32, 32)); image.Freeze(); result.Icon = image; }
-                    }
+                    if (previous != null && !previous.NeedsRetry && IconLoader.Unchanged(previous.Dependencies))
+                    { result.Icon = previous.Icon; result.Dependencies = previous.Dependencies; }
+                    else IconLoader.Load(path, result);
+                    result.NeedsRetry = result.NeedsRetry || result.Error != null;
                 }
-                catch { /* An unavailable icon must never prevent launching or displaying the row. */ }
+                catch { result.NeedsRetry = true; }
                 finally { slots.Release(); done.TrySetResult(result); }
             });
             thread.IsBackground = true; thread.SetApartmentState(ApartmentState.STA);
             try { thread.Start(); } catch { slots.Release(); throw; }
             return await done.Task.ConfigureAwait(false);
         }
-        static bool Remote(string target)
+        internal static bool Remote(string target)
         {
             string path = Targets.Clean(target);
             if (path.StartsWith("\\\\", StringComparison.Ordinal)) return true;

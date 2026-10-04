@@ -220,7 +220,7 @@ namespace OrbitLauncher
             var name = Ui.Text(item.Name, 13, Ui.Ink); name.Margin = new Thickness(36, 0, 27, 0); row.Children.Add(name);
             Ui.ValidateRow(row, name, item);
             var play = Ui.Quiet("\u25B7", delegate { RunSingle(item); }); play.Padding = new Thickness(5); play.Width = 24; play.Height = 25; play.HorizontalAlignment = HorizontalAlignment.Right; play.ToolTip = "只启动 " + item.Name; row.Children.Add(play);
-            var menu = new ContextMenu(); AddMenu(menu, "编辑应用", delegate { EditItem(group, item); }); AddMenu(menu, "从分组移除…", delegate { RemoveItem(group, item); }); row.ContextMenu = menu;
+            var menu = new ContextMenu(); AddMenu(menu, "编辑应用", delegate { EditItem(group, item); }); AddMenu(menu, "刷新图标", delegate { Ui.RefreshIcons(row); }); AddMenu(menu, "从分组移除…", delegate { RemoveItem(group, item); }); row.ContextMenu = menu;
             return row;
         }
         FrameworkElement AddCard()
@@ -232,7 +232,7 @@ namespace OrbitLauncher
         }
         static void AddMenu(ContextMenu menu, string label, Action action, bool enabled = true)
         {
-            string glyph = label.Contains("启动") ? "\uE768" : label.Contains("编辑") ? "\uE70F" : label.Contains("添加") ? "\uE710" : label.Contains("复制") ? "\uE8C8" : label.Contains("快捷") ? "\uE8A7" : label.Contains("向前") ? "\uE72B" : label.Contains("向后") ? "\uE72A" : "\uE74D";
+            string glyph = label.Contains("刷新") ? "\uE72C" : label.Contains("启动") ? "\uE768" : label.Contains("编辑") ? "\uE70F" : label.Contains("添加") ? "\uE710" : label.Contains("复制") ? "\uE8C8" : label.Contains("快捷") ? "\uE8A7" : label.Contains("向前") ? "\uE72B" : label.Contains("向后") ? "\uE72A" : "\uE74D";
             bool danger = label.Contains("删除") || label.Contains("移除");
             var i = new MenuItem { Header = label, IsEnabled = enabled }; i.Icon = Ui.Glyph(glyph, 14, danger ? Ui.Brush("#B45561") : Ui.Muted); if (danger) i.Foreground = Ui.Brush("#B45561"); i.Click += delegate { action(); }; menu.Items.Add(i);
         }
