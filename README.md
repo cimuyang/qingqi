@@ -1,8 +1,8 @@
 # 轻启
 
-A simple Windows launcher that organizes your apps, files, and websites into groups. Launch your work, study, or entertainment setup with one click—no installation or account required.一款简洁的 Windows 分组启动器，将常用应用、文件和网页按场景整理，一键开启工作、学习或娱乐环境。无需安装，无需账户，双击即用。
+![](https://github.com/cimuyang/qingqi/blob/main/%E8%BD%BB%E5%90%AF-%E5%AE%A3%E4%BC%A0%E4%BB%8B%E7%BB%8D-16x9.png)
 
-当前版本：**1.2.0**。使用 C# / WPF / .NET Framework，无第三方依赖，无需账户。
+使用 C# / WPF / .NET Framework，无第三方依赖，无需账户。
 
 ## 功能
 
