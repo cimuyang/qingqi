@@ -1,2 +1,66 @@
-# qingqi
-A simple Windows launcher that organizes your apps, files, and websites into groups. Launch your work, study, or entertainment setup with one click—no installation or account required.一款简洁的 Windows 分组启动器，将常用应用、文件和网页按场景整理，一键开启工作、学习或娱乐环境。无需安装，无需账户，双击即用。
+# 轻启
+
+简洁的 Windows 分组启动器。把常用应用放进分组，一键开启工作、通讯或专注场景。
+
+当前版本：**1.2.0**。使用 C# / WPF / .NET Framework，无第三方依赖，无需账户。
+
+## 功能
+
+- 自定义分组名称、颜色和启动顺序，支持复制、排序和拖入添加。
+- 支持 EXE、桌面快捷方式、文件、文件夹与 HTTP / HTTPS 网页，可设置启动参数和工作目录。
+- 分组每页显示 4 项，搜索可定位到应用所在页；启动分组始终打开全组应用。
+- 支持单项启动、启动全部、启动间隔和分组桌面快捷方式。
+- 显示启动进度，部分失败后可仅重试失败项。
+- 支持启动完成后自动退出、登录 Windows 时打开启动器、配置导入与导出。
+- 后台加载图标、后台原子保存、短动画、窗口位置恢复与已有实例唤起。
+
+## 构建与运行
+
+双击根目录的 **`轻启.exe`** 即可使用，无需安装或编译，也无需额外的 `.config` 文件。
+
+需要 **Windows 10 / 11** 和 **.NET Framework 4.8 或兼容更新版本**。若要从源码构建，使用 Windows 自带的 .NET Framework C# 编译器，无需安装 .NET SDK 或下载依赖。
+
+在项目根目录执行：
+
+```powershell
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\build.ps1
+```
+
+构建会生成或更新根目录的 `轻启.exe`，只需这个 EXE 文件即可运行，也可单独复制到其他文件夹使用。
+
+首次使用：在分组中点击“添加应用”，选择应用或快捷方式、确认名称后保存，再点击“启动分组”。设置位于右下角；分组菜单可编辑、排序、复制或创建桌面快捷方式。
+
+快捷键：`Ctrl+N` 新建分组，`Ctrl+F` 聚焦搜索；编辑窗口使用 `Enter` 保存、`Esc` 取消。
+
+## 数据与启动行为
+
+- 分组和设置保存在 `%LOCALAPPDATA%\OrbitLauncher\config.json`，窗口偏好单独保存在 `window.json`。
+- 每次保存保留前一版 `config.json.bak`；主配置损坏时尝试恢复有效备份。重要配置请通过设置导出。
+- 导入替换当前配置，不会立即启动应用，也不修改 Windows 开机启动项。
+- 默认在全组启动请求成功发出后退出；单项启动和失败时保留窗口，已打开的软件继续运行。
+- “启动全部”合并相同位置、参数和工作目录的项目；目标应用是否复用已有窗口由该应用决定。
+- 再次打开会唤起已有实例；忙碌时分组快捷方式请求排队，同一正在启动的分组不会重复排队。
+- 删除分组只删除启动配置；移动程序后需重新创建分组快捷方式、重新启用开机设置。
+- 启动成功表示系统接受打开请求，不代表目标应用已加载完成；管理员权限由 Windows 提示。
+
+## 验证与目录
+
+构建后运行：
+
+```powershell
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\verify.ps1
+```
+
+当前检查包含 126 项配置、WPF 交互、响应性与独立进程验证，包含单文件 EXE 独立运行检查，另生成界面截图。测试使用独立数据目录；结果位于 `qa\`。这些检查不覆盖所有第三方应用、显示器 DPI 和输入法组合。
+
+```text
+轻启.exe               可直接运行的单文件程序
+src/                   应用源码、样式及内置验证工具
+assets/AssetBuilder.cs  构建时生成应用图标
+tests/                 独立进程与窗口测试探针源码
+build.ps1              构建脚本
+verify.ps1             验证脚本
+CHANGELOG.md           更新记录
+```
+
+仓库包含源码、必要文档和根目录的 `轻启.exe`。`qa/` 和生成图标不纳入版本控制；构建与验证会重新生成。个人配置、导出备份和测试产物可能含本机路径，请勿上传。
