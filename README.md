@@ -1,8 +1,6 @@
 # 轻启
 
-简洁的 Windows 分组启动器。把常用应用放进分组，一键开启工作、通讯或专注场景。
-
-当前版本：**1.2.1**。使用 C# / WPF / .NET Framework，无第三方依赖，无需账户。
+![](https://github.com/cimuyang/qingqi/blob/main/%E8%BD%BB%E5%90%AF-%E5%AE%A3%E4%BC%A0%E4%BB%8B%E7%BB%8D-16x9.png)
 
 ## 功能
 
