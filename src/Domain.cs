@@ -7,7 +7,6 @@ using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Web.Script.Serialization;
-using Microsoft.Win32;
 
 namespace OrbitLauncher
 {
@@ -248,31 +247,6 @@ namespace OrbitLauncher
             });
             thread.IsBackground = true; thread.SetApartmentState(ApartmentState.STA); thread.Start();
             return task.Task;
-        }
-    }
-    public static class StartupRegistration
-    {
-        const string KeyPath = @"Software\Microsoft\Windows\CurrentVersion\Run";
-        const string ValueName = "OrbitLauncher";
-        public static bool Enabled
-        {
-            get
-            {
-                using (var k = Registry.CurrentUser.OpenSubKey(KeyPath))
-                {
-                    if (k == null) return false; string value = k.GetValue(ValueName) as string;
-                    return String.Equals(value, Command, StringComparison.OrdinalIgnoreCase);
-                }
-            }
-        }
-        public static string Command { get { return "\"" + Process.GetCurrentProcess().MainModule.FileName + "\""; } }
-        public static void Set(bool enabled)
-        {
-            using (var k = Registry.CurrentUser.CreateSubKey(KeyPath))
-            {
-                if (enabled) k.SetValue(ValueName, Command, RegistryValueKind.String);
-                else k.DeleteValue(ValueName, false);
-            }
         }
     }
 }

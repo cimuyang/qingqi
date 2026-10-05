@@ -21,6 +21,7 @@ namespace OrbitLauncher
     public sealed class MainWindow : SurfaceWindow
     {
         readonly ConfigStore store;
+        readonly StartupRegistration settingsStartup;
         Configuration config;
         readonly Launcher launcher = new Launcher();
         readonly CancellationTokenSource cancellation = new CancellationTokenSource();
@@ -53,9 +54,9 @@ namespace OrbitLauncher
         bool explicitExit;
         bool launching;
         public Configuration Config { get { return config; } }
-        public MainWindow(ConfigStore configStore, Configuration initial)
+        public MainWindow(ConfigStore configStore, Configuration initial, StartupRegistration startupRegistration = null)
         {
-            store = configStore; config = initial;
+            store = configStore; config = initial; settingsStartup = startupRegistration;
             Style = (Style)Application.Current.FindResource(typeof(Window));
             Title = "轻启 · 一键启动"; Width = 1160; Height = 760; MinWidth = 800; MinHeight = 540;
             WindowStartupLocation = WindowStartupLocation.CenterScreen;
@@ -168,11 +169,11 @@ namespace OrbitLauncher
             var name = Ui.Text(group.Name, 17, Ui.Ink); name.FontWeight = FontWeights.SemiBold; name.ToolTip = group.Name; titles.Children.Add(name);
             var number = Ui.Text(group.Items.Count + " 个应用", 11, Ui.Muted); number.Margin = new Thickness(0, 5, 0, 0); titles.Children.Add(number); header.Children.Add(titles);
             var more = Ui.Quiet("\uE712", delegate { }); more.FontFamily = new FontFamily("Segoe MDL2 Assets"); more.FontSize = 14; more.Width = 28; more.Padding = new Thickness(3, 6, 3, 6); more.HorizontalAlignment = HorizontalAlignment.Right; more.VerticalAlignment = VerticalAlignment.Top; more.ToolTip = "管理分组";
-            var menu = new ContextMenu(); AddMenu(menu, "编辑分组", delegate { EditGroup(group); }); AddMenu(menu, "添加应用…", delegate { AddItem(group, null); });
+            var menu = new MenuConfirmation(); AddMenu(menu, "编辑分组", delegate { EditGroup(group); }); AddMenu(menu, "添加应用…", delegate { AddItem(group, null); });
             AddMenu(menu, "复制分组", delegate { DuplicateGroup(group); }); AddMenu(menu, "创建桌面快捷方式", delegate { CreateShortcut(group); }); menu.Items.Add(new Separator());
             AddMenu(menu, "重新启动整个分组", delegate { RunGroup(group); }, group.Items.Count > 0); menu.Items.Add(new Separator());
             AddMenu(menu, "向前移动", delegate { MoveGroup(group, -1); }, config.Groups.FindIndex(g => g.Id == group.Id) > 0); AddMenu(menu, "向后移动", delegate { MoveGroup(group, 1); }, config.Groups.FindIndex(g => g.Id == group.Id) < config.Groups.Count - 1); menu.Items.Add(new Separator());
-            AddMenu(menu, "删除分组…", delegate { DeleteGroup(group); }); more.ContextMenu = menu; more.Click += delegate { menu.PlacementTarget = more; menu.IsOpen = true; }; header.Children.Add(more); grid.Children.Add(header);
+            menu.AddConfirmation("删除分组…", "确认删除", "删除“" + group.Name + "”及 " + group.Items.Count + " 个启动项，原软件与文件保留。", delegate { DeleteGroup(group); }); more.ContextMenu = menu; more.Click += delegate { menu.PlacementTarget = more; menu.IsOpen = true; }; header.Children.Add(more); grid.Children.Add(header);
             var body = new StackPanel { Tag = "page-items", ClipToBounds = true };
             if (group.Items.Count == 0)
             {
@@ -220,7 +221,7 @@ namespace OrbitLauncher
             var name = Ui.Text(item.Name, 13, Ui.Ink); name.Margin = new Thickness(36, 0, 27, 0); row.Children.Add(name);
             Ui.ValidateRow(row, name, item);
             var play = Ui.Quiet("\u25B7", delegate { RunSingle(item); }); play.Padding = new Thickness(5); play.Width = 24; play.Height = 25; play.HorizontalAlignment = HorizontalAlignment.Right; play.ToolTip = "只启动 " + item.Name; row.Children.Add(play);
-            var menu = new ContextMenu(); AddMenu(menu, "编辑应用", delegate { EditItem(group, item); }); AddMenu(menu, "刷新图标", delegate { Ui.RefreshIcons(row); }); AddMenu(menu, "从分组移除…", delegate { RemoveItem(group, item); }); row.ContextMenu = menu;
+            var menu = new MenuConfirmation(); AddMenu(menu, "编辑应用", delegate { EditItem(group, item); }); AddMenu(menu, "刷新图标", delegate { Ui.RefreshIcons(row); }); menu.AddConfirmation("从分组移除…", "确认移除", "从“" + group.Name + "”移除“" + item.Name + "”，原软件与文件保留。", delegate { RemoveItem(group, item); }); row.ContextMenu = menu;
             return row;
         }
         FrameworkElement AddCard()
@@ -281,7 +282,6 @@ namespace OrbitLauncher
         async void RemoveItem(LaunchGroup group, LaunchItem item)
         {
             if (Busy) return;
-            if (!Ui.Confirm(this, "移除“" + item.Name + "”？", "将从“" + group.Name + "”移除此启动配置。电脑上的原软件会保留。", "移除应用", true)) return;
             var next = ConfigCodec.Clone(config); next.Groups.First(g => g.Id == group.Id).Items.RemoveAll(i => i.Id == item.Id); await Commit(next);
         }
         void AddDropped(LaunchGroup group, string[] targets) { if (!Busy) PendingEdit = DropItems(group, targets); }
@@ -330,13 +330,12 @@ namespace OrbitLauncher
         async void DeleteGroup(LaunchGroup group)
         {
             if (Busy) return;
-            if (!Ui.Confirm(this, "删除“" + group.Name + "”？", "将移除此分组及其中的启动配置。电脑上的应用和文件会保留。", "删除分组", true)) return;
             var next = ConfigCodec.Clone(config); next.Groups.RemoveAll(g => g.Id == group.Id); await Commit(next);
         }
         void ShowSettings()
         {
             if (Busy) return;
-            new SettingsDialog(this, config, store, Commit).ShowDialog();
+            new SettingsDialog(this, config, store, Commit, settingsStartup).ShowDialog();
         }
         public void RunGroup(LaunchGroup group)
         {

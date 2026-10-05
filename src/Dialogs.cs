@@ -1,4 +1,5 @@
 using System;
+using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
@@ -182,14 +183,25 @@ namespace OrbitLauncher
         readonly Func<Configuration, Task<bool>> commit;
         readonly CheckBox exit = new CheckBox { Content = "分组启动后，自动退出轻启" };
         readonly CheckBox startup = new CheckBox { Content = "登录 Windows 时打开轻启" };
+        readonly StartupRegistration startupRegistration;
+        readonly TextBlock startupStatus = Ui.Text("", 11, Ui.Muted);
+        bool initialStartup;
+        bool startupAvailable = true;
         readonly ComboBox delay = new ComboBox { Height = 36, Width = 210, HorizontalAlignment = HorizontalAlignment.Left };
         readonly int[] delays = { 0, 150, 300, 500, 1000, 2000 };
-        public SettingsDialog(Window owner, Configuration config, ConfigStore configStore, Func<Configuration, Task<bool>> save) : base(owner, "让轻启，更合你的习惯", "简单设置，安静运行。", 650)
+        public SettingsDialog(Window owner, Configuration config, ConfigStore configStore, Func<Configuration, Task<bool>> save, StartupRegistration registration = null) : base(owner, "让轻启，更合你的习惯", "简单设置，安静运行。", 650)
         {
             initial = ConfigCodec.Clone(config); store = configStore; commit = save; Label("启动习惯"); exit.IsChecked = config.Settings.ExitAfterLaunch; Body.Children.Add(exit);
             Help("全部启动请求正常发出后退出；遇到启动错误时保留窗口。单个应用的测试与启动不会触发退出。");
-            try { startup.IsChecked = StartupRegistration.Enabled; } catch (Exception e) { startup.IsEnabled = false; Feedback.Text = "无法读取开机设置：" + e.Message; }
-            Body.Children.Add(startup); Help("开机只打开启动器，由你选择分组。移动 EXE 后，请重新启用此选项。"); Label("应用之间的启动间隔");
+            startupRegistration = registration ?? new StartupRegistration();
+            try { var state = startupRegistration.Read(); initialStartup = state.Registered; startup.IsChecked = initialStartup; startupStatus.Text = state.Description; }
+            catch (Exception e) { startupAvailable = false; startup.IsEnabled = false; Feedback.Text = "无法读取开机设置：" + e.Message; }
+            startup.Checked += delegate { startupStatus.Text = "点击“保存设置”登记当前程序位置；若 Windows 已禁用，请到系统设置启用。"; };
+            startup.Unchecked += delegate { startupStatus.Text = "点击“保存设置”关闭开机启动。"; };
+            Body.Children.Add(startup); startupStatus.TextWrapping = TextWrapping.Wrap; startupStatus.Margin = new Thickness(0, 7, 0, 0); Body.Children.Add(startupStatus);
+            var systemStartup = Ui.Quiet("打开 Windows 启动应用设置  ↗", delegate { try { Process.Start(new ProcessStartInfo("ms-settings:startupapps") { UseShellExecute = true }); } catch (Exception e) { Feedback.Text = "无法打开系统设置：" + e.Message + "。可在任务管理器的“启动应用”中查看。"; } });
+            systemStartup.HorizontalAlignment = HorizontalAlignment.Left; systemStartup.Margin = new Thickness(-8, 3, 0, 0); Body.Children.Add(systemStartup);
+            Help("登录后只打开轻启，由你选择分组。开启时仅登记当前用户的一条启动项。"); Label("应用之间的启动间隔");
             foreach (int ms in delays) delay.Items.Add(ms == 0 ? "立即连续启动" : ms + " 毫秒" + (ms == 300 ? " · 推荐" : ""));
             int index = Array.IndexOf(delays, config.Settings.DelayMs);
             if (index < 0) { delay.Items.Add(config.Settings.DelayMs + " 毫秒 · 当前设置"); delay.SelectedIndex = delays.Length; } else delay.SelectedIndex = index;
@@ -197,27 +209,43 @@ namespace OrbitLauncher
             var backups = new StackPanel { Orientation = Orientation.Horizontal }; var export = Ui.Button("导出配置…", delegate { Perform(Export); }, false); export.Margin = new Thickness(0, 0, 9, 0); backups.Children.Add(export); backups.Children.Add(Ui.Button("导入配置…", delegate { Perform(Import); }, false)); Body.Children.Add(backups);
             Help("导入会替换当前分组与启动习惯，原配置会保留为本地备份。导入本身不会启动应用。");
             var folder = Ui.Quiet("打开配置文件夹  ↗", OpenFolder); folder.HorizontalAlignment = HorizontalAlignment.Left; folder.Margin = new Thickness(-8, 12, 0, 0); Body.Children.Add(folder);
-            var about = Ui.Text("轻启  1.2.1  ·  本地保存，无需账户", 11, Ui.Muted); about.Margin = new Thickness(0, 25, 0, 0); Body.Children.Add(about); Buttons(delegate { Perform(Save); }, "保存设置");
+            var about = Ui.Text("轻启  1.2.2  ·  本地保存，无需账户", 11, Ui.Muted); about.Margin = new Thickness(0, 25, 0, 0); Body.Children.Add(about); Buttons(delegate { Perform(Save); }, "保存设置");
         }
         async Task Save()
         {
-            bool previous = false, changed = false;
+            StartupRegistration.State previous = null;
+            bool changed = false, committed = false;
             try
             {
                 var next = ConfigCodec.Clone(initial); next.Settings.ExitAfterLaunch = exit.IsChecked == true;
                 next.Settings.DelayMs = delay.SelectedIndex >= 0 && delay.SelectedIndex < delays.Length ? delays[delay.SelectedIndex] : initial.Settings.DelayMs;
-                if (startup.IsEnabled)
+                if (startupAvailable)
                 {
-                    previous = StartupRegistration.Enabled;
-                    if (previous != (startup.IsChecked == true)) { StartupRegistration.Set(startup.IsChecked == true); changed = true; }
+                    previous = startupRegistration.Read();
+                    bool enabled = startup.IsChecked == true;
+                    if (enabled != initialStartup || (enabled && !previous.CurrentPath))
+                    { changed = true; startupRegistration.Set(enabled); }
                 }
-                if (!await commit(next)) { if (changed) StartupRegistration.Set(previous); return; }
+                if (!await commit(next))
+                {
+                    if (changed) { startupRegistration.Restore(previous); changed = false; }
+                    Feedback.Text = "设置未保存，开机启动项已恢复。"; return;
+                }
+                committed = true; changed = false;
+                if (startupAvailable)
+                {
+                    initialStartup = startup.IsChecked == true;
+                    var state = startupRegistration.Read(); startupStatus.Text = state.Description;
+                    if (state.Registered && state.Disabled)
+                    { Feedback.Text = "设置已保存，但 Windows 已禁用开机启动。请打开系统设置启用后再查看。"; return; }
+                }
                 DialogResult = true;
             }
             catch (Exception e)
             {
-                if (changed) { try { StartupRegistration.Set(previous); } catch { } }
-                Feedback.Text = "设置未保存：" + e.Message;
+                string recovery = "";
+                if (changed) { try { startupRegistration.Restore(previous); } catch (Exception restoreError) { recovery = "\n启动项恢复失败：" + restoreError.Message; } }
+                Feedback.Text = (committed ? "设置已保存，启动状态读取失败：" : "设置未保存：") + e.Message + recovery;
             }
         }
         async Task Export()

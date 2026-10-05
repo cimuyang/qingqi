@@ -8,8 +8,10 @@ using System.Text;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
+using System.Windows.Input;
 using System.Windows.Threading;
 using System.Threading.Tasks;
+using Microsoft.Win32;
 
 namespace OrbitLauncher
 {
@@ -52,11 +54,54 @@ namespace OrbitLauncher
             }), DispatcherPriority.ApplicationIdle);
             open(); await editOperation; await Saved(main); if (failure != null) throw failure;
         }
+        static async Task VerifyStartup(MainWindow main, ConfigStore store)
+        {
+            string branch = @"Software\OrbitLauncherVerification\" + Guid.NewGuid().ToString("N");
+            string run = branch + @"\Run", approval = branch + @"\Approval";
+            var registration = new StartupRegistration(run, approval, Process.GetCurrentProcess().MainModule.FileName);
+            try
+            {
+                Check(!registration.Read().Registered, "空启动项显示尚未开启");
+                await Modal<SettingsDialog>(main, delegate { new SettingsDialog(main, main.Config, store, delegate { return Task.FromResult(true); }, registration).ShowDialog(); }, delegate(SettingsDialog d)
+                { Visuals<CheckBox>(d).First(x => x.Content.ToString().Contains("登录 Windows")).IsChecked = true; Click(d, "保存设置"); });
+                Check(registration.Read().CurrentPath, "通过设置窗口开启并回读带引号的当前 EXE 路径");
+                var enabled = registration.Read();
+                await Modal<SettingsDialog>(main, delegate { new SettingsDialog(main, main.Config, store, delegate { return Task.FromResult(true); }, registration).ShowDialog(); }, delegate(SettingsDialog d)
+                { Visuals<CheckBox>(d).First(x => x.Content.ToString().Contains("登录 Windows")).IsChecked = false; Click(d, "保存设置"); });
+                Check(!registration.Read().Registered, "通过设置窗口关闭自启动删除本程序的记录");
+                registration.Restore(enabled); Check(registration.Read().CurrentPath, "启动项回滚恢复原始值");
+                using (var key = Registry.CurrentUser.CreateSubKey(run)) key.SetValue("OrbitLauncher", @"%TEMP%\旧位置\轻启.exe", RegistryValueKind.ExpandString);
+                var old = registration.Read(); Check(old.Registered && !old.CurrentPath, "旧路径保持开启状态并提示需要修复");
+                await Modal<SettingsDialog>(main, delegate { new SettingsDialog(main, main.Config, store, delegate { return Task.FromResult(false); }, registration).ShowDialog(); }, delegate(SettingsDialog d)
+                {
+                    Check(Visuals<CheckBox>(d).First(x => x.Content.ToString().Contains("登录 Windows")).IsChecked == true, "设置窗口不会把旧路径误判为关闭");
+                    Click(d, "保存设置");
+                    Check(registration.Read().Value as string == old.Value as string && registration.Read().Kind == RegistryValueKind.ExpandString, "配置保存失败精确恢复旧启动路径及注册表类型"); Click(d, "取消");
+                });
+                await Modal<SettingsDialog>(main, delegate { new SettingsDialog(main, main.Config, store, delegate { return Task.FromResult(true); }, registration).ShowDialog(); }, delegate(SettingsDialog d)
+                {
+                    Click(d, "保存设置");
+                    Check(registration.Read().CurrentPath, "保存时临时禁用控件不影响写入启动项");
+                });
+                Check(registration.Read().CurrentPath, "保持勾选并保存即可修复程序移动后的路径");
+                byte[] disabled = new byte[12]; disabled[0] = 3;
+                using (var key = Registry.CurrentUser.CreateSubKey(approval)) key.SetValue("OrbitLauncher", disabled, RegistryValueKind.Binary);
+                Check(registration.Read().Disabled, "识别 Windows 已禁用启动项");
+                await Modal<SettingsDialog>(main, delegate { new SettingsDialog(main, main.Config, store, delegate { return Task.FromResult(true); }, registration).ShowDialog(); }, delegate(SettingsDialog d)
+                {
+                    Check(Visuals<TextBlock>(d).Any(t => t.Text.Contains("Windows 已禁用")), "设置展示系统禁用状态和处理入口");
+                    Click(d, "保存设置"); Check(d.IsVisible && Visuals<TextBlock>(d).Any(t => t.Text.Contains("设置已保存，但 Windows")), "系统禁用时保存后留在设置并明确反馈"); Click(d, "取消");
+                });
+                using (var key = Registry.CurrentUser.OpenSubKey(approval)) Check(((byte[])key.GetValue("OrbitLauncher")).SequenceEqual(disabled), "不擅自修改 Windows 的启动禁用记录");
+                registration.Set(false); Check(!registration.Read().Registered, "被系统禁用的启动项仍可关闭");
+            }
+            finally { Registry.CurrentUser.DeleteSubKeyTree(branch, false); }
+        }
         public static int Run(string folder)
         {
             Directory.CreateDirectory(folder); string root = Path.Combine(folder, "ui-" + DateTime.Now.ToString("yyyyMMdd-HHmmss-fff"));
             var app = Entry.CreateApplication(); app.ShutdownMode = ShutdownMode.OnExplicitShutdown;
-            var store = new ConfigStore(root); var main = new MainWindow(store, Configuration.Initial());
+            var store = new ConfigStore(root); var main = new MainWindow(store, Configuration.Initial(), Tests.IsolatedStartup());
             main.Loaded += delegate
             {
                 main.Dispatcher.BeginInvoke(new Action(async delegate
@@ -91,6 +136,7 @@ namespace OrbitLauncher
                             Visuals<CheckBox>(d).First(x => x.Content.ToString().Contains("自动退出")).IsChecked = false; Click(d, "保存设置");
                         });
                         Check(!main.Config.Settings.ExitAfterLaunch && !store.Load().Settings.ExitAfterLaunch, "自动退出开关通过设置窗口保存");
+                        await VerifyStartup(main, store);
                         var expanded = ConfigCodec.Clone(main.Config); var paged = expanded.Groups.First(g => g.Id == id);
                         while (paged.Items.Count < 9) paged.Items.Add(new LaunchItem { Name = "分页应用 " + (paged.Items.Count + 1), Target = Process.GetCurrentProcess().MainModule.FileName });
                         await Call(main, "Commit", expanded); main.UpdateLayout();
@@ -116,15 +162,33 @@ namespace OrbitLauncher
                         search.Text = "分页应用 9"; await Task.Delay(160); main.UpdateLayout(); Check(Visuals<TextBlock>(card()).Any(t => t.Text == "分页应用 9") && Visuals<TextBlock>(card()).Any(t => t.Text == "3 / 3"), "搜索自动切到命中应用所在页");
                         search.Clear(); main.UpdateLayout();
                         var beforeDelete = main.Config.Groups.Count;
-                        await Modal<NoticeDialog>(main, delegate { Invoke(main, "DeleteGroup", main.Config.Groups.First(g => g.Id == id)); }, delegate(NoticeDialog d)
+                        Func<string, ContextMenu> groupMenu = delegate(string groupId)
                         {
-                            Check(Visuals<Button>(d).First(b => b.Content as string == "取消").IsDefault && !Visuals<Button>(d).First(b => b.Content as string == "删除分组").IsDefault, "删除确认默认取消并使用明确操作名称"); Click(d, "取消");
-                        });
-                        Check(main.Config.Groups.Count == beforeDelete, "取消新版删除确认保留原分组");
+                            var groupCard = Visuals<Border>(main).First(b => b.Tag as string == "group:" + groupId);
+                            var more = Visuals<Button>(groupCard).First(b => b.ContextMenu != null); more.ContextMenu.PlacementTarget = more; return more.ContextMenu;
+                        };
+                        var deletionMenu = groupMenu(id); deletionMenu.IsOpen = true; deletionMenu.UpdateLayout();
+                        var deletion = deletionMenu.Items.OfType<MenuItem>().Last(); var deletionPoint = deletion.PointToScreen(new Point(0, 0)); double menuWidth = deletionMenu.ActualWidth;
+                        deletion.RaiseEvent(new RoutedEventArgs(MenuItem.ClickEvent)); deletionMenu.UpdateLayout();
+                        Check(main.Config.Groups.Count == beforeDelete && deletionMenu.IsOpen && deletion.Header is TextBlock && Application.Current.Windows.OfType<NoticeDialog>().Count() == 0, "第一次删除只在原菜单项确认且不弹出居中窗口");
+                        Check(deletion.PointToScreen(new Point(0, 0)) == deletionPoint && Math.Abs(deletionMenu.ActualWidth - menuWidth) < .1, "确认时保持菜单宽度和按钮屏幕位置");
+                        deletion.RaiseEvent(new RoutedEventArgs(MenuItem.ClickEvent)); Check(main.Config.Groups.Count == beforeDelete, "快速双击不会确认删除");
+                        var escape = new KeyEventArgs(Keyboard.PrimaryDevice, PresentationSource.FromVisual(deletionMenu), 0, Key.Escape) { RoutedEvent = Keyboard.PreviewKeyDownEvent };
+                        deletionMenu.RaiseEvent(escape); await Task.Delay(30); Check(!deletionMenu.IsOpen && deletion.Header as string == "删除分组…", "Esc 取消并恢复菜单文案");
                         var cancelledId = main.Config.Groups.First(g => g.Id != id).Id;
-                        await Modal<NoticeDialog>(main, delegate { Invoke(main, "DeleteGroup", main.Config.Groups.First(g => g.Id == cancelledId)); }, delegate(NoticeDialog d) { Click(d, "删除分组"); });
-                        Check(main.Config.Groups.Count == beforeDelete - 1 && store.Load().Groups.All(g => g.Id != cancelledId), "新版删除确认执行并持久化");
+                        deletionMenu = groupMenu(cancelledId); deletionMenu.IsOpen = true; deletion = deletionMenu.Items.OfType<MenuItem>().Last();
+                        deletion.RaiseEvent(new RoutedEventArgs(MenuItem.ClickEvent)); deletionMenu.IsOpen = false; await Task.Delay(30);
+                        deletionMenu.IsOpen = true; Check(deletion.Header as string == "删除分组…", "点击外部关闭后重新打开需要重新确认");
+                        deletion.RaiseEvent(new RoutedEventArgs(MenuItem.ClickEvent)); await Task.Delay(System.Windows.Forms.SystemInformation.DoubleClickTime + 60);
+                        deletion.RaiseEvent(new RoutedEventArgs(MenuItem.ClickEvent)); await Saved(main);
+                        Check(main.Config.Groups.Count == beforeDelete - 1 && store.Load().Groups.All(g => g.Id != cancelledId), "原位二次确认删除分组并持久化");
+                        var row = Visuals<Grid>(card()).First(g => (g.Tag as string ?? "").StartsWith("item:")); string removedId = ((string)row.Tag).Substring(5);
+                        var removalMenu = row.ContextMenu; removalMenu.PlacementTarget = row; removalMenu.IsOpen = true; var removal = removalMenu.Items.OfType<MenuItem>().Last();
+                        removal.RaiseEvent(new RoutedEventArgs(MenuItem.ClickEvent)); Check(main.Config.Groups.First(g => g.Id == id).Items.Count == 9, "移除应用第一次点击保留启动配置");
+                        await Task.Delay(System.Windows.Forms.SystemInformation.DoubleClickTime + 60); removal.RaiseEvent(new RoutedEventArgs(MenuItem.ClickEvent)); await Saved(main);
+                        Check(main.Config.Groups.First(g => g.Id == id).Items.Count == 8 && store.Load().Groups.First(g => g.Id == id).Items.All(i => i.Id != removedId), "原位确认只移除对应启动项并持久化");
                         var launchConfig = ConfigCodec.Clone(main.Config); var launchGroup = launchConfig.Groups.First(g => g.Id == id); launchConfig.Settings.ExitAfterLaunch = false; launchConfig.Settings.DelayMs = 0;
+                        launchGroup.Items = ConfigCodec.Clone(expanded).Groups.First(g => g.Id == id).Items;
                         var markers = new List<string>();
                         for (int index = 0; index < launchGroup.Items.Count; index++)
                         {

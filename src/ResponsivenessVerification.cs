@@ -102,7 +102,7 @@ namespace OrbitLauncher
                         var retryWait = Stopwatch.StartNew(); while (!File.Exists(second) && retryWait.ElapsedMilliseconds < 4000) await Task.Delay(20);
                         Check(File.Exists(second) && !File.Exists(first), "修改路径后仅重试失败项且不重复打开成功项");
                         Check(Launch(main, group.Id).Content.ToString().Contains("启动分组"), "重试成功恢复完整启动入口");
-                        gate.Wait(); var settings = new SettingsDialog(main, main.Config, store, delegate(Configuration c) { return Commit(main, c); });
+                        gate.Wait(); var settings = new SettingsDialog(main, main.Config, store, delegate(Configuration c) { return Commit(main, c); }, Tests.IsolatedStartup());
                         var releaseTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(160) }; releaseTimer.Tick += delegate { releaseTimer.Stop(); gate.Release(); };
                         var editDialog = main.Dispatcher.BeginInvoke(new Action(delegate
                         {

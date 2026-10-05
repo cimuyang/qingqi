@@ -49,7 +49,7 @@ namespace OrbitLauncher
             var time = Stopwatch.StartNew(); while (!condition() && time.ElapsedMilliseconds < 6000) await Task.Delay(30);
             if (!condition()) throw new Exception("Icon update timed out.");
         }
-        public static int Run(string folder, string userConfig = null)
+        public static int Run(string folder)
         {
             string root = Path.Combine(folder, "icons-" + DateTime.Now.ToString("yyyyMMdd-HHmmss-fff")); Directory.CreateDirectory(root);
             var app = Entry.CreateApplication(); app.ShutdownMode = ShutdownMode.OnExplicitShutdown;
@@ -92,23 +92,6 @@ namespace OrbitLauncher
                         File.Copy(exe, lateFile); await Until(delegate { return lateView.Child is Image; });
                         Check(lateView.Child is Image, "已显示应用行的暂时失败会自动重试并补齐图标"); window.Close();
                         var original = File.ReadAllBytes(shortcut); await Assets.Get(item, true); Check(original.SequenceEqual(File.ReadAllBytes(shortcut)), "图标读取不会改写用户快捷方式");
-                        // Read the reported WeChat shortcut only; never start the app or save its configuration.
-                        if (userConfig != null)
-                        {
-                            var user = ConfigStore.Read(userConfig); var wechat = user.Groups.SelectMany(g => g.Items).FirstOrDefault(i => i.Name == "微信");
-                            if (wechat == null) throw new Exception("WeChat test item not found.");
-                            if (wechat != null)
-                            {
-                                var before = File.ReadAllBytes(userConfig); var actual = await Assets.Get(wechat, true); string target, location; int iconIndex;
-                                bool resolved = IconLoader.Shortcut(Targets.Clean(wechat.Target), out target, out location, out iconIndex);
-                                var targetAsset = resolved ? await Assets.Get(new LaunchItem { Target = target }, true) : null;
-                                Check(actual.Icon != null && !actual.NeedsRetry && targetAsset != null && Hash(actual.Icon) == Hash(targetAsset.Icon), "真实微信快捷方式获得目标程序图标");
-                                Check(before.SequenceEqual(File.ReadAllBytes(userConfig)), "真实快捷方式检查不改写个人分组配置");
-                                var demo = ConfigCodec.Clone(c); demo.Groups[0].Name = "开始工作"; demo.Groups[0].Items.Clear(); demo.Groups[0].Items.Add(new LaunchItem { Name = "微信", Target = wechat.Target });
-                                var show = (Task<bool>)typeof(MainWindow).GetMethod("Commit", BindingFlags.NonPublic | BindingFlags.Instance).Invoke(main, new object[] { demo }); await show; main.UpdateLayout();
-                                await Task.Delay(200); Ui.Snapshot(main, Path.Combine(folder, "12-wechat-icon.png"));
-                            }
-                        }
                     }
                     catch (Exception e) { failed = true; log.Add(e.ToString()); }
                     finally { File.WriteAllText(Path.Combine(folder, "icon-test-results.txt"), String.Join("\r\n", log) + "\r\nTOTAL: " + log.Count(s => s.StartsWith("PASS:")) + " passed\r\n", Encoding.UTF8); main.Close(); }

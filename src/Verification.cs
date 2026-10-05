@@ -14,6 +14,11 @@ namespace OrbitLauncher
     public static class Tests
     {
         static List<string> results;
+        internal static StartupRegistration IsolatedStartup()
+        {
+            string branch = @"Software\OrbitLauncherVerification\" + Guid.NewGuid().ToString("N");
+            return new StartupRegistration(branch + @"\Run", branch + @"\Approval", Process.GetCurrentProcess().MainModule.FileName);
+        }
         static void Check(bool value, string label) { if (!value) throw new Exception("FAIL: " + label); results.Add("PASS: " + label); }
         static void Reject(Action action, string label)
         {
@@ -115,11 +120,12 @@ namespace OrbitLauncher
                             var previous = Ui.Descendants<System.Windows.Controls.Button>(main).First(b => String.Equals(b.Tag as string, "page-prev:" + config.Groups[0].Id)); previous.RaiseEvent(new RoutedEventArgs(System.Windows.Controls.Button.ClickEvent));
                             var item = new ItemDialog(main, config.Groups[0].Items[0], config); item.Show(); item.UpdateLayout(); Ui.Snapshot(item, Path.Combine(folder, "03-app-editor.png")); item.Close();
                             var group = new GroupDialog(main, ConfigCodec.Clone(config).Groups[0], config); group.Show(); group.UpdateLayout(); Ui.Snapshot(group, Path.Combine(folder, "04-group-editor.png")); group.Close();
-                            var settings = new SettingsDialog(main, config, store, delegate { return Task.FromResult(true); }); settings.Show(); settings.UpdateLayout(); Ui.Snapshot(settings, Path.Combine(folder, "05-settings.png")); settings.Close();
-                            var notice = new NoticeDialog(main, "删除“保持联系”？", "将移除此分组及其中的启动配置。电脑上的应用和文件会保留。", "删除分组", true, true); notice.Show(); notice.UpdateLayout(); Ui.Snapshot(notice, Path.Combine(folder, "08-confirmation.png")); Ui.Snapshot(main, Path.Combine(folder, "09-modal-backdrop.png")); notice.Close();
-                            var more = Ui.Descendants<System.Windows.Controls.Button>(main).First(b => b.ContextMenu != null && b.ContextMenu.Items.Count > 4); var menu = more.ContextMenu; menu.PlacementTarget = more; menu.IsOpen = true; menu.UpdateLayout(); Ui.SnapshotVisual(menu, Path.Combine(folder, "10-group-menu.png")); menu.IsOpen = false;
+                            var settings = new SettingsDialog(main, config, store, delegate { return Task.FromResult(true); }, Tests.IsolatedStartup()); settings.Show(); settings.UpdateLayout(); Ui.Snapshot(settings, Path.Combine(folder, "05-settings.png")); settings.Close();
+                            var notice = new NoticeDialog(main, "替换现有配置？", "导入将替换当前分组与设置，原配置保留为本地备份。", "替换配置", true, true); notice.Show(); notice.UpdateLayout(); Ui.Snapshot(notice, Path.Combine(folder, "08-confirmation.png")); Ui.Snapshot(main, Path.Combine(folder, "09-modal-backdrop.png")); notice.Close();
+                            var more = Ui.Descendants<System.Windows.Controls.Button>(main).First(b => b.ContextMenu != null && b.ContextMenu.Items.Count > 4); var menu = more.ContextMenu; menu.PlacementTarget = more; menu.IsOpen = true; menu.UpdateLayout(); Ui.SnapshotVisual(menu, Path.Combine(folder, "10-group-menu.png"));
+                            var deletion = menu.Items.OfType<System.Windows.Controls.MenuItem>().Last(); deletion.RaiseEvent(new RoutedEventArgs(System.Windows.Controls.MenuItem.ClickEvent)); menu.UpdateLayout(); Ui.SnapshotVisual(menu, Path.Combine(folder, "11-inline-confirmation.png")); menu.IsOpen = false;
                             main.Width = 800; main.Height = 540; main.UpdateLayout(); Ui.Snapshot(main, Path.Combine(folder, "06-compact.png"));
-                            File.WriteAllText(Path.Combine(folder, "preview-results.txt"), "PASS: 10 WPF windows/layouts rendered", Encoding.UTF8);
+                            File.WriteAllText(Path.Combine(folder, "preview-results.txt"), "PASS: 11 WPF windows/layouts rendered", Encoding.UTF8);
                         }
                         catch (Exception e) { File.WriteAllText(Path.Combine(folder, "preview-results.txt"), e.ToString()); Environment.ExitCode = 1; }
                         finally { main.Close(); app.Shutdown(); }
